@@ -80,21 +80,40 @@ function playMelody() {
   const idx = Math.floor(Math.random() * MELODY_PATTERNS.length);
   currentMelody = MELODY_PATTERNS[idx];
 
-  let index = 0;
-  function playNextNote() {
-    if (index < currentMelody.length) {
-      let freq = currentMelody[index];
-      osc.frequency.rampTo(freq, 0.1);
-      if (Tone.context.state !== 'running') Tone.context.resume();
-      osc.start();
-      setTimeout(() => {
-        osc.stop();
-        index++;
-        playNextNote();
-      }, 300);
-    }
+  osc.start();
+  Tone.context.resume(); 
+
+  const totalDuration = 2; 
+  const peakTimeRatio = 0.5; 
+
+  let startTime = Tone.now();
+
+  if (idx === 0) { // Linear up
+    osc.frequency.value = currentMelody[0];
+    osc.frequency.rampTo(currentMelody[currentMelody.length - 1], totalDuration, startTime);
+  } else if (idx === 1) { // Linear down
+    osc.frequency.value = currentMelody[0];
+    osc.frequency.rampTo(currentMelody[currentMelody.length - 1], totalDuration, startTime);
+  } else if (idx === 2) { // Up then down (triangle)
+    const peakFreq = Math.max(...currentMelody);
+    const peakTime = startTime + totalDuration * peakTimeRatio;
+    osc.frequency.value = currentMelody[0];
+    osc.frequency.rampTo(peakFreq, totalDuration * peakTimeRatio, startTime);
+    osc.frequency.rampTo(currentMelody[currentMelody.length - 1], totalDuration * (1 - peakTimeRatio), peakTime);
+  } else if (idx === 3) { // Down then up (inverse triangle)
+    const troughFreq = Math.min(...currentMelody);
+    const troughTime = startTime + totalDuration * peakTimeRatio;
+    osc.frequency.value = currentMelody[0];
+    osc.frequency.rampTo(troughFreq, totalDuration * peakTimeRatio, startTime);
+    osc.frequency.rampTo(currentMelody[currentMelody.length - 1], totalDuration * (1 - peakTimeRatio), troughTime);
   }
-  playNextNote();
+
+  // Stop the oscillator after the total duration
+  setTimeout(() => {
+    osc.stop();
+    isDrawing = false; // Just to be safe
+  }, (totalDuration + 0.2) * 1000); // Convert to milliseconds
+
   clearCanvas();
   if (showGuide) drawMelodyGuide();
 }
@@ -118,8 +137,8 @@ function evaluateDrawing() {
   let maxPossibleCost = normalizedMelody.length;
   let finalDTW = dtwDistance / (maxPossibleCost + 0.0001);
   let threshold = 0.1;
-  let resultText = finalDTW < threshold ? "Good match! ✅" : "Try again ❌";
-  document.getElementById("result").innerText = `DTW Score: ${finalDTW.toFixed(3)} - ${resultText}`;
+  let resultText = finalDTW < threshold ? "Correct! That is the correct melody ✅" : "I'm sorry, that is not quite right. Try again ❌";
+  document.getElementById("result").innerText = `${resultText}`;
 }
 
 function clearCanvas() {
@@ -150,7 +169,7 @@ function drawMelodyGuide() {
   endShape();
 }
 
-// Utility functions
+// DTW helper functions functions for scaling the DTW distance
 function scaleMelodyToCanvas(melodyArr) {
   let minM = Math.min(...melodyArr);
   let maxM = Math.max(...melodyArr);
